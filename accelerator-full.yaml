@@ -1,0 +1,113 @@
+accelerator:
+  displayName: Citizen Accelerator
+  description: Contains a sample API with DB option
+  iconUrl: https://blogs.vmware.com/wp-content/uploads/2022/02/tap.png
+  tags:
+    - citizen
+    - PostgreSQL
+  options:
+    # CONFIG SERVICE SECTION
+    - name: usePostgresCheckbox
+      description: "If set to true, application will be configured to use an existing PostgreSQL databse instance"
+      label: Use PostgreSQL for persistency?
+      dataType: boolean
+      defaultValue: false
+      inputType: checkbox
+      required: true
+    - name: postgresUrl
+      description: "Database service URL"
+      inputType: text
+      label: DB URL
+      required: true
+      defaultValue: "/citizensDef"
+      dependsOn:
+        name: usePostgresCheckbox
+    - name: postgresUsername
+      description: "Database username"
+      inputType: text
+      label: DB URL
+      required: true
+      defaultValue: "postgresDef"
+      dependsOn:
+        name: usePostgresCheckbox
+    - name: postgresPassword
+      description: "Database Password"
+      inputType: text
+      label: DB URL
+      required: true
+      defaultValue: "postgresDef"
+      dependsOn:
+        name: usePostgresCheckbox
+engine:
+  chain:
+  - condition: "!#usePostgresCheckbox"
+    merge:
+    - include: ['**']
+      exclude: ['README.md']
+    - include: [ "README.md" ]
+      chain:
+      - type: ReplaceText
+        substitutions:
+          - text: "dbType"
+            with: "'In-Memory jdbc:h2:mem:testdb'"
+    - include: ['src/main/resources/application.properties']
+      chain:
+        - type: ReplaceText
+          substitutions:
+            - text: "##DB_PARAMS"
+              with:  |
+                'spring.datasource.url=jdbc:h2:mem:testdb
+                spring.datasource.driverClassName=org.h2.Driver
+                spring.datasource.username=sa
+                spring.datasource.password=password
+                spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+                spring.h2.console.enabled=true'
+    - include: [ "pom.xml" ]
+      chain:
+        - type: ReplaceText
+          regex:
+            pattern: "(?<startOfDependencies><dependencies>)(?<existingDependencies>(?![\\s\\S]+<groupId>org.postgresql</groupId>\\s*<artifactId>postgresql</artifactId>[\\s\\S]+</dependencies>))"
+            with: |
+              '${startOfDependencies}
+                  <dependency>
+                    <groupId>com.h2database</groupId>
+                    <artifactId>h2</artifactId>
+                    <scope>runtime</scope>
+                  </dependency>${existingDependencies}'
+
+  - condition: "#usePostgresCheckbox"
+    merge:
+    - include: ['**']
+      exclude: ['README.md']
+    - include: [ "README.md" ]
+      chain:
+        - type: ReplaceText
+          substitutions:
+            - text: "dbType"
+              with: "#postgresUrl.toLowerCase()"
+    - include: ['src/main/resources/application.properties']
+      chain:
+        - type: ReplaceText
+          substitutions:
+            - text: "##DB_PARAMS"
+              with:  |
+                'spring.datasource.url=' + #postgresUrl.toLowerCase() + '
+                spring.datasource.username=' + #postgresUsername + '
+                spring.datasource.password=' + #postgresPassword + '
+                spring.jpa.hibernate.ddl-auto=create-drop
+                spring.jpa.show-sql=true
+                spring-jpa.properties.hibernates.dialect=org.hibernate.dialect.PosgreSQLDialect
+                spring-jpa.properties.hibernates.format_sql=true'
+    - include: [ "pom.xml" ]
+      chain:
+        - type: ReplaceText
+          regex:
+            pattern: "(?<startOfDependencies><dependencies>)(?<existingDependencies>(?![\\s\\S]+<groupId>org.postgresql</groupId>\\s*<artifactId>postgresql</artifactId>[\\s\\S]+</dependencies>))"
+            with: |
+              '${startOfDependencies}
+                  <dependency>
+                    <groupId>org.postgresql</groupId>
+                    <artifactId>postgresql</artifactId>
+                    <scope>runtime</scope>
+                  </dependency>${existingDependencies}'
+            

@@ -1,0 +1,83 @@
+
+OPTION 1 - INSTALLING POSTGRESS OPERATOR
+
+##POSTGRES OPERATOR INSTALLATION
+echo "LOGIN"
+helm registry login registry.tanzu.vmware.com --username=cpulcini@vmware.com --password=Vmware_001
+kubectl create ns postgres-operator
+kubectl create secret docker-registry regsecret --docker-server=https://registry.tanzu.vmware.com/ --docker-username=cpulcini@vmware.com --docker-password=Vmware_001 --namespace=postgres-operator
+echo "CLEAN"
+rm -rf /tmp/vmware-sql-postgres-operator
+echo "PULL"
+helm pull oci://registry.tanzu.vmware.com/tanzu-sql-postgres/vmware-sql-postgres-operator --version v2.2.0 --untar --untardir /tmp
+echo "CDR CHECK NOT EXISTS"
+kubectl get crd postgres.sql.tanzu.vmware.com
+echo "INSTALL"
+helm install my-postgres-operator /tmp/vmware-sql-postgres-operator --namespace=postgres-operator --create-namespace --wait
+echo "SA CHECK NOT EXISTS"
+kubectl get serviceaccount -n postgres-operator
+echo "CDR CHECK EXISTS"
+kubectl get crd postgres.sql.tanzu.vmware.com
+echo "sleep 30"
+sleep 30
+echo "CHECK RUN"
+kubectl get all --selector app=postgres-operator -n postgres-operator
+echo "CHECK API"
+kubectl api-resources --api-group=sql.tanzu.vmware.com
+echo "LIST"
+helm list -n postgres-operator
+echo "GET STORAGECLASS"
+kubectl get storageclasses
+
+OUTPUT FOR LAST COMMANDS
+NAME                	NAMESPACE        	REVISION	UPDATED                              	STATUS  	CHART                              	APP VERSION
+my-postgres-operator	postgres-operator	1       	2023-10-17 12:34:59.494205 +0200 CEST	deployed	vmware-sql-postgres-operator-v2.2.0	v2.2.0
+pcarlo@pcarlo3C2T5 ~ % kubectl get storageclasses
+NAME            PROVISIONER             RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
+ebs-sc          ebs.csi.aws.com         Delete          WaitForFirstConsumer   false                  8d
+gp2 (default)   kubernetes.io/aws-ebs   Delete          WaitForFirstConsumer   false                  10d
+
+
+##POSTGRES INSTANCE CREATION TO TEST
+
+kubectl create ns DB-NAMESPACE
+kubectl create secret docker-registry regsecret --docker-server=https://registry.tanzu.vmware.com/ --docker-username=cpulcini@vmware.com --docker-password=Vmware_001 --namespace=DB-NAMESPACE
+kubectl apply -f config/postgres/postgres.yaml
+kubectl get pod -n DB-NAMESPACE
+kubectl get pvc -n DB-NAMESPACE
+kubectl exec -it DBNAME-name-0 -n DB-NAMESPACE -- psql
+
+
+OPTION 2 - LEVERAGING PRE INSTALLED OPERATORS (ON TAPSANDBOX)
+pcarlo@pcarlo3C2T5 citizen7 % tanzu services class list
+  NAME                  DESCRIPTION
+  kafka-unmanaged       Kafka by Bitnami
+  mongodb-unmanaged     MongoDB by Bitnami
+  mysql-unmanaged       MySQL by Bitnami
+  postgresql-unmanaged  PostgreSQL by Bitnami
+  rabbitmq-unmanaged    RabbitMQ by Bitnami
+  redis-unmanaged       Redis by Bitnami
+  test-login            Login by AppSSO - user:password - UNSAFE FOR PRODUCTION!
+pcarlo@pcarlo3C2T5 citizen7 %
+
+##POSTGRES class-claim create CREATION TO TEST FOR cpu user
+tanzu service class-claim create citizen --class postgresql-unmanaged -n cpu
+tanzu services class-claims get citizen -n cpu
+
+##CONNECT TO CLAIMED DB
+
+tanzu services class-claims get citizen --namespace cpu | yq '.Status' | grep Name | yq '.Name'
+>>>26cbc79e-8e68-4bdc-af67-3f18a7395095
+
+kubectl get secret 26cbc79e-8e68-4bdc-af67-3f18a7395095 -n cpu -o yaml | yq '.data.database' | base64 -d
+echo
+kubectl get secret 26cbc79e-8e68-4bdc-af67-3f18a7395095 -n cpu -o yaml | yq '.data.username' | base64 -d
+echo
+kubectl get secret 26cbc79e-8e68-4bdc-af67-3f18a7395095 -n cpu -o yaml | yq '.data.password' | base64 -d
+echo
+
+kubectl exec -it citizen-928pg-0 -n citizen-928pg -- psql -d citizen-928pg -U postgres
+
+citizen-kbtmq=# \l
+
+\d
